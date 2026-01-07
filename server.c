@@ -20,7 +20,7 @@ typedef struct {
 
 void close_server();
 void* handle_client(void* client_details);
-void broadcast_message(const char* message, int exclude_client_id);
+void broadcast_message(const char* message, const char* sender_alias);
 
 int server_id;
 int client_count = 0;
@@ -148,6 +148,9 @@ void* handle_client(void* client_details) {
     } while (!connected);
     strncpy(CLIENTS[client_id].client_alias, alias, MAX_USERNAME_LEN);
     printf(GREEN BOLD "Success: " RESET "Client %d set alias to " YELLOW "'%s'.\n" RESET, client_id + 1, alias);
+    char join_msg[BUFFER_SIZE];
+    snprintf(join_msg, sizeof(join_msg), "%s has joined the chat!", alias);
+    broadcast_message(join_msg, SERVER_ALIAS);
 
     while (connected) {
         ssize_t bytes_received = recv(sock, buffer, BUFFER_SIZE, 0);
@@ -156,16 +159,15 @@ void* handle_client(void* client_details) {
             break;
         }
 
-        buffer[strcspn(buffer, "\n")] = 0; // Remove newline character
-        printf("Received message: %s ,From client " YELLOW "'%s'\n" RESET, buffer, alias);
+        buffer[strcspn(buffer, "\n")] = 0;
 
-        if (strncmp(buffer, "quit", 4) == 0) {
+        if (strncmp(buffer, QUIT, strlen(QUIT)) == 0) {
             printf(YELLOW BOLD "Info: " RESET "Client " YELLOW "'%s'" RESET " requested to close the connection.\n", alias);
             break;
+        } else {
+            broadcast_message(buffer, alias);
         }
 
-        const char* response = "Message received";
-        send(sock, response, strlen(response), 0);
     }
 
     // Remove client from CLIENTS array
@@ -177,7 +179,34 @@ void* handle_client(void* client_details) {
 
     client_count--;
     close(sock);
+    char leave_msg[BUFFER_SIZE];
+    snprintf(leave_msg, sizeof(leave_msg), "%s has left the chat.", alias);
+    broadcast_message(leave_msg, SERVER_ALIAS);
     printf(YELLOW BOLD "Info: " RESET "Connection with client " YELLOW "'%s'" RESET " closed.\n", alias);
     return NULL;
 }
 
+void broadcast_message(const char* message, const char* sender_alias) {
+    clientDetails_t WHITE_LIST[MAX_CLIENTS];
+
+    char message_copy[BUFFER_SIZE];
+    char filtered_message[MAX_MESSAGE_LEN];
+    strncpy(message_copy, message, BUFFER_SIZE);
+    char* control_sequence = strtok(message_copy, " ");
+    snprintf(filtered_message, sizeof(filtered_message), "%s", message + strlen(control_sequence) + 1);
+    if (strncmp(control_sequence, INCLUDE, strlen(INCLUDE)) == 0) {
+        printf(YELLOW BOLD "Info: " RESET "Inclusion broadcast invoked.\n");
+    } else if (strncmp(control_sequence, EXCLUDE, strlen(EXCLUDE)) == 0) {
+        printf(YELLOW BOLD "Info: " RESET "Exclusion broadcast invoked.\n");
+    } else {
+        memcpy(WHITE_LIST, CLIENTS, sizeof(CLIENTS));
+        strncpy(filtered_message, message, MAX_MESSAGE_LEN);
+    }
+
+    printf(YELLOW BOLD "Info: " RESET "Broadcasting message %s from '%s'\n", filtered_message, sender_alias);
+    for (int i = 0; i < client_count; i++) {
+        char formatted_message[BUFFER_SIZE];
+        snprintf(formatted_message, sizeof(formatted_message), "%s: %s", sender_alias, filtered_message);
+        send(WHITE_LIST[i].client_socket, formatted_message, strlen(formatted_message), 0);
+    }
+}

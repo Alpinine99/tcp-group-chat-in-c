@@ -7,6 +7,8 @@
 #include <string.h>
 #include <pthread.h>
 #include "commons.h"
+#include "client_consts.h"
+
 
 void* handle_sends(void* arg);
 
@@ -63,9 +65,16 @@ int main(int argc, char* argv[]) {
         }
 
         buffer[strcspn(buffer, "\n")] = 0; // Remove newline character
-        printf(CYAN BOLD "Server: " RESET "%s\n", buffer);
-
-        if (strncmp(buffer, "quit", 4) == 0) {
+        char* alias = strtok(buffer, ":");
+        char* message = strtok(NULL, "");
+        if (message != NULL) {
+            if (strcmp(alias, SERVER_ALIAS) == 0) {
+                printf(RED BOLD "(Server)" RESET "%s\n", message);
+            } else {
+                printf(CYAN BOLD "%s:" RESET "%s\n", alias, message);
+            }
+        }
+        if (strncmp(buffer, QUIT, strlen(QUIT)) == 0) {
             printf(YELLOW BOLD "Info: " RESET "Server requested to close the connection.\n");
             break;
         }
@@ -85,12 +94,26 @@ void* handle_sends(void* arg) {
         printf(GREEN BOLD "You: " RESET);
         fgets(buffer, BUFFER_SIZE, stdin);
         
-        send(sock, buffer, strlen(buffer), 0);
-
         buffer[strcspn(buffer, "\n")] = 0; // Remove newline character
-        if (strncmp(buffer, "quit", 4) == 0) {
+        if (strncmp(buffer, LEAVE_CMD, strlen(LEAVE_CMD)) == 0) {
             printf(YELLOW BOLD "Info: " RESET "You requested to close the connection.\n");
+            send(sock, QUIT, strlen(QUIT), 0);
             break;
+        }
+
+        char* control_sequence = strtok(buffer, " ");
+        if (strstr(control_sequence, PRIVATE_MSG_EXCLUDE_CMD)) {
+            char modified_msg[BUFFER_SIZE];
+            // TODO: replace command with control sequence tomorrow when i open computer
+            snprintf(modified_msg, sizeof(modified_msg), "%s %s", EXCLUDE, buffer + strlen(PRIVATE_MSG_EXCLUDE_CMD));
+            send(sock, modified_msg, strlen(modified_msg), 0);
+            printf("%s", modified_msg);
+        } else if (strstr(control_sequence, PRIVATE_MSG_INCLUDE_CMD)) {
+            char modified_msg[BUFFER_SIZE];
+            snprintf(modified_msg, sizeof(modified_msg), "%s %s", INCLUDE, buffer + strlen(PRIVATE_MSG_INCLUDE_CMD));
+            send(sock, modified_msg, strlen(modified_msg), 0);
+        } else {
+            send(sock, buffer, strlen(buffer), 0);
         }
     }
     return NULL;

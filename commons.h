@@ -18,3 +18,9 @@
 #define MAX_USERNAME_LEN 50
 #define MIN_USERNAME_LEN 5
 #define MAX_MESSAGE_LEN 256
+
+// Control sequences for special commands
+#define INCLUDE "#!<INCLUDE>!#"
+#define EXCLUDE "#!<EXCLUDE>!#"
+#define QUIT "#!<QUIT>!#"
+#define SERVER_ALIAS "#!<SERVER>!#"
