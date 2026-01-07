@@ -7,21 +7,24 @@
 #include <signal.h>
 #include <pthread.h>
 #include <string.h>
+#include <stdbool.h>
 #include "commons.h"
 
 
 typedef struct {
     int client_socket;
     int client_id;
+    pthread_t client_thead;
+    char client_alias[MAX_USERNAME_LEN];
 } clientDetails_t;
 
 void close_server();
 void* handle_client(void* client_details);
+void broadcast_message(const char* message, int exclude_client_id);
 
 int server_id;
 int client_count = 0;
-int client_sockets[MAX_CLIENTS];
-pthread_t clients_threads[MAX_CLIENTS];
+clientDetails_t CLIENTS[MAX_CLIENTS];
 
 int main(int argc, char* argv[]) {
 
@@ -71,6 +74,7 @@ int main(int argc, char* argv[]) {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
         int client_socket;
+        pthread_t client_thread;
         if ((client_socket = accept(server_id, (struct sockaddr*)&client_addr, &client_len)) < 0) {
             printf(RED BOLD "\aError: " RESET "Failed to accept client %d connection.\n", client_count + 1);
         } else {
@@ -81,12 +85,12 @@ int main(int argc, char* argv[]) {
             printf(CYAN BOLD "Info: " RESET "Client %d IP address: %s Port: %d\n", client_count + 1, client_ip, ntohs(client_addr.sin_port));
 
             // Create a thread to handle the client
-            client_sockets[client_count] = client_socket;
-            clientDetails_t client_details = {.client_id=client_count, .client_socket=client_sockets[client_count]};
-            if (pthread_create(&clients_threads[client_count], NULL, handle_client, (void *)&client_details) != 0) {
+            clientDetails_t client_details = {.client_id=client_count, .client_socket=client_socket, .client_thead=client_thread};
+            if (pthread_create(&client_thread, NULL, handle_client, (void *)&client_details) != 0) {
                 printf(RED BOLD "\aError: " RESET "Failed to create thread for client %d.\n", client_count + 1);
             } else {
                 printf(GREEN BOLD "Success: " RESET "Thread created for client %d.\n", client_count + 1);
+                CLIENTS[client_count] = client_details;
                 client_count++;
             }
         }
@@ -94,7 +98,7 @@ int main(int argc, char* argv[]) {
 
     // Join client threads before exiting
     for (int i = 0; i < client_count; i++) {
-        pthread_join(clients_threads[i], NULL);
+        pthread_join(CLIENTS[i].client_thead, NULL);
     }
     close_server();
     return 0;
@@ -113,18 +117,50 @@ void* handle_client(void* client_details) {
     char buffer[BUFFER_SIZE];
     int client_id = details.client_id;
 
-    while (1) {
+    char alias[MAX_USERNAME_LEN];
+    bool connected = false;
+    send(sock, "Please enter your alias: ", 24, 0);
+    do {
+        ssize_t bytes_received = recv(sock, alias, MAX_USERNAME_LEN, 0);
+        if (bytes_received <= 0) {
+            printf(RED BOLD "\aError: " RESET "Failed to receive alias from client %d.\n", client_id + 1);
+            break;
+        }
+
+        alias[strcspn(alias, "\n")] = 0; // Remove newline character
+        if (strlen(alias) < MIN_USERNAME_LEN || strlen(alias) >= MAX_USERNAME_LEN) {
+            char msg[BUFFER_SIZE];
+            snprintf(msg, sizeof(msg), RED BOLD "\aError: " RESET "Invalid alias. Please try again (character count %d-%d).\n", MIN_USERNAME_LEN, MAX_USERNAME_LEN - 1);
+            send(sock, msg, strlen(msg), 0);
+        } else {
+            for (int i = 0; i < client_count; i++) {
+                if (i != client_id && strcmp(CLIENTS[i].client_alias, alias) == 0) {
+                    char msg[BUFFER_SIZE];
+                    snprintf(msg, sizeof(msg), RED BOLD "\aError: " RESET "Alias '%s' is already taken. Please choose another one.\n", alias);
+                    send(sock, msg, strlen(msg), 0);
+                    alias[0] = '\0'; // Invalidate alias
+                    break;
+                }
+            }
+            if (alias[0] != '\0')
+                connected = true;
+        }
+    } while (!connected);
+    strncpy(CLIENTS[client_id].client_alias, alias, MAX_USERNAME_LEN);
+    printf(GREEN BOLD "Success: " RESET "Client %d set alias to " YELLOW "'%s'.\n" RESET, client_id + 1, alias);
+
+    while (connected) {
         ssize_t bytes_received = recv(sock, buffer, BUFFER_SIZE, 0);
         if (bytes_received <= 0) {
-            printf(RED BOLD "\aError: " RESET "Failed to receive data from client %d.\n", client_id + 1);
+            printf(RED BOLD "\aError: " RESET "Failed to receive data from client" YELLOW " '%s'.\n" RESET, alias);
             break;
         }
 
         buffer[strcspn(buffer, "\n")] = 0; // Remove newline character
-        printf("Received message: %s ,From client %d\n", buffer, client_id + 1);
+        printf("Received message: %s ,From client " YELLOW "'%s'\n" RESET, buffer, alias);
 
         if (strncmp(buffer, "quit", 4) == 0) {
-            printf(YELLOW BOLD "Info: " RESET "Client %d requested to close the connection.\n", client_id + 1);
+            printf(YELLOW BOLD "Info: " RESET "Client " YELLOW "'%s'" RESET " requested to close the connection.\n", alias);
             break;
         }
 
@@ -132,9 +168,16 @@ void* handle_client(void* client_details) {
         send(sock, response, strlen(response), 0);
     }
 
+    // Remove client from CLIENTS array
+    for (int i = client_id; i < client_count - 1; i++) {
+        CLIENTS[i] = CLIENTS[i + 1];
+        CLIENTS[i].client_id = i;
+    }
+    memset(&CLIENTS[client_count - 1], 0, sizeof(clientDetails_t));
+
     client_count--;
     close(sock);
-    printf(YELLOW BOLD "Info: " RESET "Connection with client %d closed.\n", client_id + 1);
+    printf(YELLOW BOLD "Info: " RESET "Connection with client " YELLOW "'%s'" RESET " closed.\n", alias);
     return NULL;
 }
 
