@@ -114,7 +114,6 @@ void close_server() {
 void* handle_client(void* client_details) {
     clientDetails_t details = *(clientDetails_t*)client_details;
     int sock = details.client_socket;
-    char buffer[BUFFER_SIZE];
     int client_id = details.client_id;
 
     char alias[MAX_USERNAME_LEN];
@@ -148,11 +147,12 @@ void* handle_client(void* client_details) {
     } while (!connected);
     strncpy(CLIENTS[client_id].client_alias, alias, MAX_USERNAME_LEN);
     printf(GREEN BOLD "Success: " RESET "Client %d set alias to " YELLOW "'%s'.\n" RESET, client_id + 1, alias);
-    char join_msg[BUFFER_SIZE];
+    char join_msg[BUFFER_SIZE] = {0};
     snprintf(join_msg, sizeof(join_msg), "%s has joined the chat!", alias);
     broadcast_message(join_msg, SERVER_ALIAS);
 
     while (connected) {
+        char buffer[BUFFER_SIZE] = {0};
         ssize_t bytes_received = recv(sock, buffer, BUFFER_SIZE, 0);
         if (bytes_received <= 0) {
             printf(RED BOLD "\aError: " RESET "Failed to receive data from client" YELLOW " '%s'.\n" RESET, alias);
@@ -179,7 +179,7 @@ void* handle_client(void* client_details) {
 
     client_count--;
     close(sock);
-    char leave_msg[BUFFER_SIZE];
+    char leave_msg[BUFFER_SIZE] = {0};
     snprintf(leave_msg, sizeof(leave_msg), "%s has left the chat.", alias);
     broadcast_message(leave_msg, SERVER_ALIAS);
     printf(YELLOW BOLD "Info: " RESET "Connection with client " YELLOW "'%s'" RESET " closed.\n", alias);
@@ -189,8 +189,8 @@ void* handle_client(void* client_details) {
 void broadcast_message(const char* message, const char* sender_alias) {
     clientDetails_t WHITE_LIST[MAX_CLIENTS];
 
-    char message_copy[BUFFER_SIZE];
-    char filtered_message[MAX_MESSAGE_LEN];
+    char message_copy[BUFFER_SIZE] = {0};
+    char filtered_message[MAX_MESSAGE_LEN] = {0};
     strncpy(message_copy, message, BUFFER_SIZE);
     char* control_sequence = strtok(message_copy, " ");
     snprintf(filtered_message, sizeof(filtered_message), "%s", message + strlen(control_sequence) + 1);
@@ -204,9 +204,9 @@ void broadcast_message(const char* message, const char* sender_alias) {
     }
 
     printf(YELLOW BOLD "Info: " RESET "Broadcasting message %s from '%s'\n", filtered_message, sender_alias);
+    char formatted_message[BUFFER_SIZE] = {0};
+    snprintf(formatted_message, sizeof(formatted_message), "%s: %s", sender_alias, filtered_message);
     for (int i = 0; i < client_count; i++) {
-        char formatted_message[BUFFER_SIZE];
-        snprintf(formatted_message, sizeof(formatted_message), "%s: %s", sender_alias, filtered_message);
         send(WHITE_LIST[i].client_socket, formatted_message, strlen(formatted_message), 0);
     }
 }

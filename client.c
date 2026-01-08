@@ -101,20 +101,18 @@ void* handle_sends(void* arg) {
             break;
         }
 
-        char* control_sequence = strtok(buffer, " ");
+        char buffer_copy[BUFFER_SIZE] = {0};
+        char modified_buffer[BUFFER_SIZE] = {0};
+        strcpy(buffer_copy, buffer);
+        char* control_sequence = strtok(buffer_copy, " ");
         if (strstr(control_sequence, PRIVATE_MSG_EXCLUDE_CMD)) {
-            char modified_msg[BUFFER_SIZE];
-            // TODO: replace command with control sequence tomorrow when i open computer
-            snprintf(modified_msg, sizeof(modified_msg), "%s %s", EXCLUDE, buffer + strlen(PRIVATE_MSG_EXCLUDE_CMD));
-            send(sock, modified_msg, strlen(modified_msg), 0);
-            printf("%s", modified_msg);
+            snprintf(modified_buffer, sizeof(modified_buffer), "%s %s", EXCLUDE, buffer + strlen(PRIVATE_MSG_EXCLUDE_CMD));
         } else if (strstr(control_sequence, PRIVATE_MSG_INCLUDE_CMD)) {
-            char modified_msg[BUFFER_SIZE];
-            snprintf(modified_msg, sizeof(modified_msg), "%s %s", INCLUDE, buffer + strlen(PRIVATE_MSG_INCLUDE_CMD));
-            send(sock, modified_msg, strlen(modified_msg), 0);
+            snprintf(modified_buffer, sizeof(modified_buffer), "%s %s", INCLUDE, buffer + strlen(PRIVATE_MSG_INCLUDE_CMD));
         } else {
-            send(sock, buffer, strlen(buffer), 0);
+            strcpy(modified_buffer, buffer);
         }
+        send(sock, modified_buffer, strlen(modified_buffer), 0);
     }
     return NULL;
 }
