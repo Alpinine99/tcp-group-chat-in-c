@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <stdbool.h>
+#include <regex.h>
 #include "commons.h"
 
 
@@ -123,23 +124,35 @@ void* handle_client(void* client_details) {
     char alias[MAX_USERNAME_LEN];
     bool connected = false;
     send(sock, SERVER_ALIAS ": Please enter your alias? ", BUFFER_SIZE, 0);
+    regex_t name_format;
+    regcomp(&name_format, "^[A-Za-z_]+$", 0);
     do {
+        strcpy(alias, "");
         ssize_t bytes_received = recv(sock, alias, MAX_USERNAME_LEN, 0);
         if (bytes_received <= 0) {
             printf(RED BOLD "\aError: " RESET "Failed to receive alias from client %d.\n", client_id + 1);
             break;
         }
 
-        alias[strcspn(alias, "\n")] = 0; // Remove newline character
+        alias[strcspn(alias, "\n")] = 0;
+        
+        if (regexec(&name_format, alias, 0, NULL, 0) != 0) {
+            printf(YELLOW BOLD "Warning: " RESET "invalid username attempt.");
+            char msg[BUFFER_SIZE];
+            snprintf(msg, sizeof(msg), SERVER_ALIAS ": " RED BOLD "\a[Error!] " RESET "Invalid alias format ensure (Aa-Zz,_).\n");
+            send(sock, msg, strlen(msg), 0);
+            continue;
+        }
+
         if (strlen(alias) < MIN_USERNAME_LEN || strlen(alias) >= MAX_USERNAME_LEN) {
             char msg[BUFFER_SIZE];
-            snprintf(msg, sizeof(msg), RED BOLD "\aError: " RESET "Invalid alias. Please try again (character count %d-%d).\n", MIN_USERNAME_LEN, MAX_USERNAME_LEN - 1);
+            snprintf(msg, sizeof(msg), SERVER_ALIAS ": " RED BOLD "\a[Error!] " RESET "Invalid alias. Ensure your character is count (%d-%d).\n", MIN_USERNAME_LEN, MAX_USERNAME_LEN - 1);
             send(sock, msg, strlen(msg), 0);
         } else {
             for (int i = 0; i < client_count; i++) {
                 if (i != client_id && strcmp(CLIENTS[i].client_alias, alias) == 0) {
                     char msg[BUFFER_SIZE];
-                    snprintf(msg, sizeof(msg), RED BOLD "\aError: " RESET "Alias '%s' is already taken. Please choose another one.\n", alias);
+                    snprintf(msg, sizeof(msg), SERVER_ALIAS ": " RED BOLD "\a[Error!] " RESET "Alias '%s' is already taken.\n", alias);
                     send(sock, msg, strlen(msg), 0);
                     alias[0] = '\0'; // Invalidate alias
                     break;
@@ -149,6 +162,7 @@ void* handle_client(void* client_details) {
                 connected = true;
         }
     } while (!connected);
+    regfree(&name_format);
     strncpy(CLIENTS[client_id].client_alias, alias, MAX_USERNAME_LEN);
     printf(GREEN BOLD "Success: " RESET "Client %d set alias to " YELLOW "'%s'.\n" RESET, client_id + 1, alias);
     char join_msg[MAX_MESSAGE_LEN] = {0};
@@ -230,6 +244,39 @@ void broadcast_message(const char* message, const char* sender_alias) {
         }
     } else if (strncmp(control_sequence, EXCLUDE, strlen(EXCLUDE)) == 0) {
         printf(YELLOW BOLD "Info: " RESET "Exclusion broadcast invoked.\n");
+        char* exclude_list = strtok(message_copy + (strlen(EXCLUDE) + 1), " ");
+        snprintf(filtered_message, sizeof(filtered_message), BLUE BOLD "[@]" RESET "%s", message + strlen(control_sequence) + strlen(exclude_list) + 2);
+        clientDetails_t BLACK_LIST[MAX_CLIENTS] = {0};
+        int r = resolve_client_list(BLACK_LIST, exclude_list, sender_socket);
+        if (r == 0) {
+            white_list_count = 0;
+            for (int i = 0; i < client_count; i++) {
+                printf("aliases: %s, %s\n", CLIENTS[i].client_alias, BLACK_LIST[i].client_alias);
+                char* alias = CLIENTS[i].client_alias;
+                bool exclude = false;
+                for (int j=0; j<client_count; j++) {
+                    if (strcmp(alias, BLACK_LIST[j].client_alias) == 0) {
+                        printf(YELLOW BOLD "Info: " RESET "excluded alias '%s'\n" ,BLACK_LIST[i].client_alias);
+                        exclude = true;
+                        break;
+                    } else if (strcmp(BLACK_LIST[j].client_alias, "") == 0) {
+                        break;
+                    }
+                }
+                if (!exclude) {
+                    WHITE_LIST[white_list_count++] = CLIENTS[i];
+                }
+            }
+        } else if (r == 1) {
+            snprintf(filtered_message, sizeof(filtered_message), RED BOLD "[Error!]" RESET " text not delivered");
+            char formatted_message[BUFFER_SIZE] = {0};
+            snprintf(formatted_message, sizeof(formatted_message), "%s: %s", SERVER_ALIAS, filtered_message);
+            send(sender_socket, formatted_message, sizeof(formatted_message), 0);
+            printf(YELLOW BOLD "Info: " RESET "skipping exclude broadcast from '%s'\n", sender_alias);
+            return;
+        } else {
+            return;
+        }
     } else {
         memcpy(WHITE_LIST, CLIENTS, sizeof(CLIENTS));
         strncpy(filtered_message, message, MAX_MESSAGE_LEN);
