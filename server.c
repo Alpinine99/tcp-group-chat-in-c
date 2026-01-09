@@ -125,9 +125,11 @@ void* handle_client(void* client_details) {
     bool connected = false;
     send(sock, SERVER_ALIAS ": Please enter your alias? ", BUFFER_SIZE, 0);
     regex_t name_format;
-    regcomp(&name_format, "^[A-Za-z_]+$", 0);
+    if (regcomp(&name_format, "^[A-Za-z]+$", REG_EXTENDED)) {
+        printf(RED BOLD "Error: " RESET "could not compile regex");
+    }
     do {
-        strcpy(alias, "");
+        memset(alias, 0, sizeof(alias));
         ssize_t bytes_received = recv(sock, alias, MAX_USERNAME_LEN, 0);
         if (bytes_received <= 0) {
             printf(RED BOLD "\aError: " RESET "Failed to receive alias from client %d.\n", client_id + 1);
@@ -135,11 +137,10 @@ void* handle_client(void* client_details) {
         }
 
         alias[strcspn(alias, "\n")] = 0;
-        
         if (regexec(&name_format, alias, 0, NULL, 0) != 0) {
-            printf(YELLOW BOLD "Warning: " RESET "invalid username attempt.");
+            printf(YELLOW BOLD "Warning: " RESET "invalid username attempt.\n");
             char msg[BUFFER_SIZE];
-            snprintf(msg, sizeof(msg), SERVER_ALIAS ": " RED BOLD "\a[Error!] " RESET "Invalid alias format ensure (Aa-Zz,_).\n");
+            snprintf(msg, sizeof(msg), SERVER_ALIAS ": " RED BOLD "\a[Error!] " RESET "Invalid alias format ensure (Aa-Zz).\n");
             send(sock, msg, strlen(msg), 0);
             continue;
         }
@@ -270,7 +271,7 @@ void broadcast_message(const char* message, const char* sender_alias) {
         } else if (r == 1) {
             snprintf(filtered_message, sizeof(filtered_message), RED BOLD "[Error!]" RESET " text not delivered");
             char formatted_message[BUFFER_SIZE] = {0};
-            snprintf(formatted_message, sizeof(formatted_message), "%s: %s", SERVER_ALIAS, filtered_message);
+            snprintf(formatted_message, sizeof(formatted_message), "%s: %s\n", SERVER_ALIAS, filtered_message);
             send(sender_socket, formatted_message, sizeof(formatted_message), 0);
             printf(YELLOW BOLD "Info: " RESET "skipping exclude broadcast from '%s'\n", sender_alias);
             return;

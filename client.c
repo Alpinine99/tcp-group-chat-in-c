@@ -65,21 +65,21 @@ int main(int argc, char* argv[]) {
         }
 
         buffer[strcspn(buffer, "\n")] = 0; // Remove newline character
+        if (strncmp(buffer, QUIT, strlen(QUIT)) == 0) {
+            break;
+        }
         char* alias = strtok(buffer, ":");
         char* message = strtok(NULL, "");
         if (message != NULL) {
             if (strcmp(alias, SERVER_ALIAS) == 0) {
-                printf(RED BOLD "(Server)" RESET "%s\n", message);
+                printf(RED BOLD "\t\t(Server)" RESET "%s\n", message);
             } else {
-                printf(CYAN BOLD "%s:" RESET "%s\n", alias, message);
+                printf(CYAN BOLD "\t\t%s:" RESET "%s\n", alias, message);
             }
-        }
-        if (strncmp(buffer, QUIT, strlen(QUIT)) == 0) {
-            printf(YELLOW BOLD "Info: " RESET "Server requested to close the connection.\n");
-            break;
         }
     }
 
+    printf(YELLOW BOLD "Info: " RESET "Server connection closed.\n");
     pthread_join(send_thread, NULL);
 
     close(client_id);
@@ -91,8 +91,9 @@ void* handle_sends(void* arg) {
     int sock = *((int*)arg);
     while (1) {
         char buffer[BUFFER_SIZE] = {0};
-        printf(GREEN BOLD "You: " RESET);
         fgets(buffer, BUFFER_SIZE, stdin);
+        if (strlen(buffer) < 2)
+            continue;
         
         buffer[strcspn(buffer, "\n")] = 0; // Remove newline character
         if (strncmp(buffer, LEAVE_CMD, strlen(LEAVE_CMD)) == 0) {
