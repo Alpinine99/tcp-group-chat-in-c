@@ -53,10 +53,12 @@ make
 
 - *To include or exclude an alias or aliases.*
 
->`@alias message`, `@alias1,alias2,alias3 message`, replace the aliases with the actual aliases and message with your message to specify who **should receive** this message.
+> `@alias message`, `@alias1,alias2,alias3 message`, replace the aliases with the actual aliases and message with your message to specify who **should receive** this message.
 `!@alias message`, `!@alias1,alias2,alias3 message`, replace the aliases with the actual aliases and message with your message to specify who **should not receive** this message.
 
 - *To quit you can simple type `quit` and you'll close the connection.*
+
+- *You can end the connection from server side by pressing `ctrl+c`, which will also alert the clients and closes their connection.*
 
 ## Running client on another machine
 

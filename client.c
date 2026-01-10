@@ -60,7 +60,7 @@ int main(int argc, char* argv[]) {
         char buffer[BUFFER_SIZE] = {0};
         ssize_t bytes_received = recv(client_id, buffer, BUFFER_SIZE, 0);
         if (bytes_received <= 0) {
-            printf(RED BOLD "\aError: " RESET "Failed to receive data from server.\n");
+            printf(YELLOW BOLD "\aWarning: " RESET "Failed to receive data from server.\n");
             break;
         }
 
@@ -72,17 +72,22 @@ int main(int argc, char* argv[]) {
         char* message = strtok(NULL, "");
         if (message != NULL) {
             if (strcmp(alias, SERVER_ALIAS) == 0) {
-                printf(RED BOLD "\t\t(Server)" RESET "%s\n", message);
+                if (strcmp(message, " " QUIT) == 0) {
+                    printf(RED BOLD UNDERLINE "\nServer has closed the connection." RESET " Press ctrl+c to continue.\n");
+                    break;
+                } else {
+                    printf(RED BOLD "\t\t(Server)" RESET "%s\n", message);
+                }
             } else {
                 printf(CYAN BOLD "\t\t%s:" RESET "%s\n", alias, message);
             }
         }
     }
 
+    close(client_id);
     printf(YELLOW BOLD "Info: " RESET "Server connection closed.\n");
     pthread_join(send_thread, NULL);
 
-    close(client_id);
     printf(YELLOW BOLD "Info: " RESET "Connection closed.\n");
     return 0;
 }
