@@ -12,10 +12,9 @@
 #define UNDERLINE "\x1b[4m"
 
 // Networking constants
-#define PORT 8080
 #define BUFFER_SIZE 1024
 #define MAX_CLIENTS 10
-#define MAX_USERNAME_LEN 50
+#define MAX_USERNAME_LEN 15
 #define MIN_USERNAME_LEN 5
 #define MAX_MESSAGE_LEN 256
 
